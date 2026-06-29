@@ -10,7 +10,7 @@ import os
 import zipfile
 import gc
 
-
+#estas variables se usan para guardar las imagenes que se generan de cada filtro y poder descargarlas 
 vol_original_global = None
 vol_gauss_global = None
 mu_final_global = None 
@@ -29,6 +29,11 @@ def leer_y_procesar_oct(ruta_archivo_oct):
     global vi_global
     global video_data_global
 
+
+#este metodo es el que se usa para abrir el buscador de archivos, leer el .OCT y extraer los dos archivos que se usan el programa
+#intensity es donde esta todo el volumen tomado por el tomografo
+#VideoImage es una foto de la zona donde se hizo la captura de la informacion
+
     try:
         print(f"Abriendo {os.path.basename(ruta_archivo_oct)} ")
 
@@ -45,12 +50,17 @@ def leer_y_procesar_oct(ruta_archivo_oct):
                     dtype=np.uint8
                 ).reshape((640, 480, 4)).copy()
 
+#aqui empizan los calculos para los filtros que se aplican (Gauss, atenuacion e iluminacion)
+
+
+#----filtro gauss----#
         print("Aplicando filtro gaussiano...")
         vol_gauss = gaussian_filter(
             vol_original,
             sigma=1
         ).astype(np.float32)
 
+#---filtro iluminacion----#
         print("Aplicando iluminación...")
         v_min_g, v_max_g = vol_gauss.min(), vol_gauss.max()
         vol_norm = (vol_gauss - v_min_g) / (v_max_g - v_min_g)
@@ -60,11 +70,13 @@ def leer_y_procesar_oct(ruta_archivo_oct):
             clip_limit=0.1
         ).astype(np.float32)
 
-        # ---- CÁLCULO DE COEFICIENTE DE ATENUACIÓN ----
+#----Coeficiente de ateniacion----#
+
+        #estas dos variables se extraen de un archivo dentro del OCT llamado HEADER 
         dz = 1.71878 / 512
         axis_z = 2
 
-       
+ #----filtro ateniacion aplicado al volumen de gauss---#      
         print("Aplicando coeficiente de atenuación (Filtro Gauss)...")
         vol_limpio_gauss = np.maximum(vol_gauss, 1e-8)
         cum_int_gauss = np.cumsum(
@@ -83,7 +95,7 @@ def leer_y_procesar_oct(ruta_archivo_oct):
             v_max_mu_gauss
         ).astype(np.float32)
 
-        
+ #----filtro ateniacion aplicado al volumen original---#             
         print("Aplicando coeficiente de atenuación (Volumen Original)...")
         vol_limpio_orig = np.maximum(vol_original, 1e-8)
         cum_int_orig = np.cumsum(
@@ -101,7 +113,9 @@ def leer_y_procesar_oct(ruta_archivo_oct):
             0,
             v_max_mu_orig
         ).astype(np.float32)
-        # -----------------------------------------------
+
+
+#  aqui comienza el visualizador de napiri es la parte donde se cargan los volumenes e imagenes ya procesados y leidos
 
        
         vol_original_global = vol_original
@@ -156,7 +170,7 @@ def leer_y_procesar_oct(ruta_archivo_oct):
             gamma=2
         )
         
-        #este layer muestra el mapa peroa colores donde se pueden apreciar algunos detalles extra
+        #este layer muestra el mapa peroa colores donde se pueden apreciar algunos detalles extra, esta comentado por se se requiere habilitarlo despues
         #pero en algunos oct no se bien devido a la tecnica que se utiliza para la toma de la muestra 
         #layer7 = viewer.add_labels(
         #    vol_gauss.astype(np.int16),
@@ -180,10 +194,9 @@ def leer_y_procesar_oct(ruta_archivo_oct):
 
         print("Visualizador listo.")
         napari.run()
-
         del mu_vermeer_gauss, mu_vermeer_orig
         gc.collect()
-
+        
     except KeyError:
         messagebox.showerror(
             "Error",
@@ -194,8 +207,10 @@ def leer_y_procesar_oct(ruta_archivo_oct):
             "Error",
             f"Ocurrió un error:\n{str(e)}"
         )
+# aqui termina la seccion del visualizador de napiri
 
 
+#aqui comienza la seccion de para el guardado de las imagenes
 def normalizar_imagen(img):
     img = img.astype(np.float32)
     img = img - img.min()
@@ -320,7 +335,7 @@ def exportar_resultados():
                 os.path.join(carpeta, f"{vista}_CORTE_{corte_usuario}_GAUSS.png")
             )
             Image.fromarray(corte_mu).save(
-                os.path.join(carpeta, f"{vista}_CORTE_{corte_usuario}_ATENUACION.png")
+                os.path.join(carpeta, f"{vista}_CORTE_{corte_usuario}_ATENUACION_GAUSS.png")
             )
             Image.fromarray(corte_mu_orig).save(
                 os.path.join(carpeta, f"{vista}_CORTE_{corte_usuario}_ATENUACION_ORIGINAL.png")
@@ -348,8 +363,9 @@ def exportar_resultados():
         bg="lime green",
         command=continuar_exportacion
     ).pack(pady=20)
+#aqui termina la seccion para el  guardado de las imagenes 
 
-
+#aqui empieza la estructura de la ventana principal
 def seleccionar_archivo():
     global ruta_archivo_global
     archivo = filedialog.askopenfilename(
